@@ -1,62 +1,183 @@
-class ProductManager{
-    constructor(){
-        this.products = []
+const fs = require('fs');
+
+class ProductManager {
+  constructor(path) {
+    this.path = path;
+  }
+
+  fileExists() {
+    return fs.existsSync(this.path);
+  }
+
+  async getProducts() {
+    try {
+      if (this.fileExists()) {
+        const content = await fs.promises.readFile(this.path, 'utf-8');
+        const contentJson = JSON.parse(content);
+        return contentJson;
+      } else {
+        throw new Error('El archivo no existe');
+      }
+    } catch (error) {
+      console.log('Error al leer el archivo', error);
+      return [];
     }
+  }
 
-    getProducts(){
-        return this.products
-    }
+  async addProduct(newProduct) {
+    try {
+      if (this.fileExists()) {
+        const productsData = await fs.promises.readFile(this.path, 'utf-8');
+        const products = JSON.parse(productsData);
 
-    addProduct(title, description, thumbnail, price, code, stock){
-        
-        if (!title || !description || !thumbnail || !price || !code || !stock) {
-            console.log("Todos los campos deben ser completados")
-            return
-          }
+        if (!newProduct.title ||!newProduct.description ||!newProduct.thumbnail ||!newProduct.price ||!newProduct.code ||!newProduct.stock) {
+          console.log('Todos los campos deben ser completados');
+          return;
+        }
 
-        const CodeRepeat = this.products.every(product => product.code !== code)
-          
-        if (!CodeRepeat) {
-            console.log(`El código "${code}" ya esta en uso.`)
-            return
+        const codeRepeat = products.some((product) => product.code === newProduct.code);
+        if (codeRepeat) {
+          console.log(`El código "${newProduct.code}" ya está en uso.`);
+          return;
         }
 
         let newId;
-        if(!this.products.length){
-            newId=1;
-        }else{
-            newId = this.products[this.products.length-1].id+1
-        }        
-       
-        const NewProducts = {
-            id: newId,
-            title,
-            description,
-            thumbnail,
-            price,
-            code,
-            stock,
-        }
-
-        this.products.push(NewProducts)
-    }
-
-    getProductById(id) {
-        const product = this.products.find(product => product.id === id)
-        if (product) {
-          return product
+        if (!products.length) {
+          newId = 1;
         } else {
-          console.log("Producto no encontrado.");
+          newId = products[products.length - 1].id + 1;
         }
+
+        const productToAdd = {
+          id: newId,
+          ...newProduct,
+        };
+
+        products.push(productToAdd);
+
+        await fs.promises.writeFile(this.path, JSON.stringify(products, null, '\t'));
+        console.log('Producto Agregado Exitosamente');
       }
+    } catch (error) {
+      console.log('Error al leer el archivo de productos:', error);
+      return undefined;
+    }
+  }
+
+  async getProductById(id) {
+    try {
+      if (this.fileExists()) {
+        const findId = await fs.promises.readFile(this.path, 'utf-8');
+        const products = JSON.parse(findId);
+
+        const product = products.find((product) => product.id === id);
+
+        if (product) {
+          console.log('Producto encontrado');
+          return product;
+        } else {
+          console.log('Producto no encontrado');
+          return undefined;
+        }
+      } else {
+        console.log('El archivo no existe');
+        return undefined;
+      }
+    } catch (error) {
+      console.log('Error al leer el archivo:', error);
+      return undefined;
+    }
+  }
+
+  async updateProduct(id, updatedFields) {
+    try {
+      if (this.fileExists()) {
+        const findId = await fs.promises.readFile(this.path, 'utf-8');
+        const products = JSON.parse(findId);
+
+        const productId = products.findIndex((product) => product.id === id);
+
+        if (productId !== -1) {
+          const updatedProduct = {
+            id,
+            ...products[productId],
+            ...updatedFields,
+          };
+
+          products[productId] = updatedProduct;
+
+          await fs.promises.writeFile(this.path, JSON.stringify(products, null, '\t'));
+          console.log('Producto actualizado');
+        } else {
+          console.log('No se encontró el producto');
+        }
+      } else {
+        console.log('El archivo no existe');
+      }
+    } catch (error) {
+      console.log('Error al leer o escribir el archivo:', error);
+    }
+  }
+
+  async deleteProduct(id) {
+    try {
+      if (this.fileExists()) {
+        const productsData = await fs.promises.readFile(this.path, 'utf-8');
+        const products = JSON.parse(productsData);
+
+        const productId = products.findIndex((product) => product.id === id);
+
+        if (productId !== -1) {
+          products.splice(productId, 1);
+
+          await fs.promises.writeFile(this.path, JSON.stringify(products, null, '\t'));
+          console.log('Producto Eliminado');
+        } else {
+          console.log('Producto no encontrado');
+        }
+      } else {
+        console.log('El archivo no existe');
+      }
+    } catch (error) {
+      console.log('Error al leer o escribir el archivo:', error);
+    }
+  }
 }
 
-const Manager = new ProductManager()
-console.log(Manager.getProducts())
-Manager.addProduct("Tomate", "Fruta","Sin imagen", 200, "A-123" , 25)
-Manager.addProduct("Tomate", "Fruta","Sin imagen", 300, "B-123" , 25)
-console.log(Manager.getProducts())
+module.exports = ProductManager;
 
-const product = Manager.getProductById(4);
-console.log(product)
+const productManager = require('./ProductManagers.js');
+const manager = new productManager('./Products.json');
 
+const operaciones = async()=>{
+
+  await manager.addProduct({
+    title:'Naranja',
+    description: 'Fruta',
+    thumbnail: 'Naranja.jpg',
+    price: 20,
+    code: 'ABC-010',
+    stock: 25,
+  })
+
+  const products = await manager.getProducts();
+  console.log("Productos Guardados",products);
+
+  console.log("...Buscando Producto...")
+  const productById = await manager.getProductById(2);
+  console.log(productById)
+
+  const productToUpdateId = 2;
+  const updatedFields = {
+    stock: 200,
+  };
+  
+  await manager.updateProduct(productToUpdateId, updatedFields)
+  
+  console.log("...Buscando Producto...")
+  const productDelete = await manager.deleteProduct(5)
+  console.log(productDelete)
+  
+}
+
+operaciones()
